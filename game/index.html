@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PILLAR COURT — Harrow District Siege</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e12; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #fff; user-select: none; }
+  #app, #app canvas { position: fixed; inset: 0; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+  .panel { background: rgba(8, 12, 16, 0.72); border: 1px solid rgba(255,255,255,0.22); border-radius: 6px; }
+  /* Radar: top-left. */
+  #radarBox { position: absolute; top: 12px; left: 12px; padding: 6px 6px 4px; }
+  #radarBox h3 { font-size: 11px; letter-spacing: 2px; color: #ffd27f; text-align: center; margin-bottom: 4px; }
+  #radar { display: block; width: 168px; height: 168px; border-radius: 3px; }
+  /* Top-centre: scores, timer, round, alive pips. */
+  #topbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; padding: 6px 18px 7px; min-width: 330px; }
+  #topbar .scores { font-size: 26px; font-weight: bold; letter-spacing: 1px; line-height: 1; }
+  #topbar .scores .a { color: #f5a623; } #topbar .scores .b { color: #3fa9ff; }
+  #topbar .scores .dash { color: #fff; margin: 0 8px; }
+  #timer { font-size: 20px; font-weight: bold; color: #fff; margin-top: 3px; letter-spacing: 2px; }
+  #roundLabel { font-size: 10px; letter-spacing: 2px; color: #cfd6da; margin-top: 2px; }
+  .pips { display: flex; gap: 4px; justify-content: center; margin-top: 5px; }
+  .pips i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  #pipsA i.on { background: #f5a623; } #pipsB i.on { background: #3fa9ff; }
+  .pips i.off { background: #3a3f45; border: 1px solid #666; }
+  #pipsA { margin-bottom: 3px; }
+  /* Killfeed: top-right. */
+  #killfeed { position: absolute; top: 12px; right: 12px; width: 250px; text-align: right; font-size: 13px; }
+  #killfeed div { background: rgba(8,12,16,0.72); border: 1px solid rgba(255,255,255,0.18); border-radius: 4px; padding: 4px 8px; margin-bottom: 4px; }
+  #killfeed b.alder { color: #f5a623; } #killfeed b.birch { color: #3fa9ff; }
+  /* Radio chatter: left-middle, role-tagged. */
+  #chatter { position: absolute; left: 12px; top: 268px; width: 265px; font-size: 12px; }
+  #chatter div { background: rgba(8,12,16,0.66); border-left: 3px solid #f5a623; border-radius: 3px; padding: 5px 8px; margin-bottom: 5px; }
+  #chatter b { display: block; font-size: 11px; letter-spacing: 1px; }
+  #chatter b s { color: #ffd27f; text-decoration: none; font-size: 10px; }
+  #chatter span { color: #e8e4da; line-height: 1.3; }
+  /* Objective + plan + case chip: centre, under the topbar. */
+  #objBox { position: absolute; top: 128px; left: 50%; transform: translateX(-50%); text-align: center; width: 640px; }
+  #objective { font-size: 14px; font-weight: bold; letter-spacing: 1px; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,0.8); }
+  #planline { font-size: 12px; color: #ffd27f; letter-spacing: 1px; margin-top: 3px; text-shadow: 0 1px 3px #000; }
+  #casechip { display: inline-block; margin-top: 5px; font-size: 12px; font-weight: bold; letter-spacing: 1px; background: rgba(8,12,16,0.72); border: 1px solid #ffd27f; color: #ffd27f; border-radius: 4px; padding: 3px 10px; }
+  /* Plant / defuse progress: centre. */
+  #plantwrap { position: absolute; top: 208px; left: 50%; transform: translateX(-50%); width: 430px; text-align: center; display: none; }
+  #plantlabel { font-size: 13px; font-weight: bold; letter-spacing: 1px; text-shadow: 0 1px 3px #000; }
+  #plantbar { height: 12px; background: rgba(0,0,0,0.6); border: 1px solid #fff; border-radius: 6px; margin-top: 5px; overflow: hidden; }
+  #plantfill { height: 100%; width: 0%; background: #ffd27f; }
+  #plantring { display: inline-block; width: 34px; height: 34px; border-radius: 50%; margin-top: 6px; background: conic-gradient(#ffd27f 0%, rgba(255,255,255,0.2) 0%); }
+  #plantpct { font-size: 15px; font-weight: bold; vertical-align: 10px; margin-left: 6px; text-shadow: 0 1px 3px #000; }
+  /* Bottom-left: health, armour, funds, teammates. */
+  #vitals { position: absolute; left: 12px; bottom: 34px; padding: 8px 12px; min-width: 210px; }
+  #healthnum { font-size: 40px; font-weight: bold; line-height: 1; display: inline-block; }
+  #vitals .hpLabel { font-size: 11px; letter-spacing: 2px; color: #cfd6da; }
+  #armourbar { height: 7px; background: #333; border-radius: 3px; margin: 5px 0 3px; overflow: hidden; }
+  #armourfill { height: 100%; width: 0%; background: #7fb8e8; }
+  #funds { font-size: 17px; font-weight: bold; color: #8fd68f; }
+  #mates { margin-top: 7px; }
+  .mate { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 3px; }
+  .mate b { width: 42px; } .mate span { width: 62px; color: #ffd27f; font-size: 9px; letter-spacing: 1px; }
+  .mate i { flex: 1; height: 6px; background: #333; border-radius: 3px; overflow: hidden; display: block; }
+  .mate i em { display: block; height: 100%; background: #f5a623; }
+  .mate s { width: 26px; text-align: right; text-decoration: none; }
+  .mate.dead { opacity: 0.45; } .mate.dead i em { background: #666; }
+  /* Weapon panel: bottom-right DOCKED position, SMALLER than the
+     v6 design (Zul: keep it in its place, make it smaller) — reduced
+     paddings, smaller type, tighter spacing, still legible at 300px. */
+  #weaponpanel { position: absolute; right: 12px; bottom: 30px; padding: 5px 8px 6px; min-width: 152px; text-align: right; }
+  #wpname { font-size: 11px; font-weight: bold; letter-spacing: 1px; color: #ffd27f; }
+  #wpammoRow { line-height: 1; margin-top: 1px; }
+  #wpammo { font-size: 20px; font-weight: bold; }
+  #wpres { font-size: 11px; color: #cfd6da; }
+  #wpslots, #wputils { margin-top: 3px; display: flex; gap: 3px; justify-content: flex-end; flex-wrap: wrap; }
+  #wpslots span, #wputils span { font-size: 8px; letter-spacing: 0.5px; padding: 1px 4px; border: 1px solid rgba(255,255,255,0.25); border-radius: 3px; color: #cfd6da; }
+  #wpslots span.sel, #wputils span.sel { background: #f5a623; color: #111; border-color: #f5a623; font-weight: bold; }
+  /* Controls hint: bottom-centre. */
+  #hint { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; letter-spacing: 1px; color: #fff; text-shadow: 0 1px 3px #000, 0 0 6px rgba(0,0,0,0.9); white-space: nowrap; }
+  /* Crosshair + hitmarker. */
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --gap: 8px; }
+  #crosshair i { position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair .t { left: -1px; top: calc(-10px - var(--gap)); width: 2px; height: 10px; }
+  #crosshair .b { left: -1px; top: var(--gap); width: 2px; height: 10px; }
+  #crosshair .l { top: -1px; left: calc(-10px - var(--gap)); height: 2px; width: 10px; }
+  #crosshair .r { top: -1px; left: var(--gap); height: 2px; width: 10px; }
+  #crosshair .dot { left: -1.5px; top: -1.5px; width: 3px; height: 3px; border-radius: 50%; }
+  #hitmark { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; }
+  #hitmark i { position: absolute; width: 14px; height: 2px; background: #ff5040; box-shadow: 0 0 3px #000; }
+  #hitmark .a { transform: translate(-12px, -10px) rotate(45deg); }
+  #hitmark .b { transform: translate(0px, -10px) rotate(-45deg); }
+  #hitmark .c { transform: translate(-12px, 8px) rotate(-45deg); }
+  #hitmark .d { transform: translate(0px, 8px) rotate(45deg); }
+  /* Banner, vignette, flash, damage numbers. */
+  #banner { position: absolute; top: 57%; left: 50%; transform: translateX(-50%); font-size: 34px; font-weight: bold; letter-spacing: 2px; text-align: center; text-shadow: 0 2px 6px #000, 0 0 18px rgba(0,0,0,0.9); white-space: nowrap; display: none; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px 40px rgba(200, 30, 20, 0.85); opacity: 0; z-index: 6; }
+  #flashov { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 7; }
+  #lowhp { position: absolute; bottom: 130px; left: 14px; font-size: 12px; font-weight: bold; color: #ff6a5a; letter-spacing: 1px; display: none; }
+  .dmgnum { position: fixed; transform: translate(-50%, -50%); font-size: 21px; font-weight: bold; color: #fff; text-shadow: 0 1px 3px #000, 0 0 8px rgba(255,80,40,0.8); pointer-events: none; z-index: 8; white-space: nowrap; }
+  .dmgnum.head { color: #ffd27f; font-size: 24px; }
+  /* Buy menu. */
+  .overlay { position: fixed; inset: 0; display: none; align-items: flex-start; justify-content: center; z-index: 20; pointer-events: auto; background: rgba(4, 6, 8, 0.45); }
+  #buymenu { padding-top: 56px; }
+  #buybox { width: 940px; max-width: 96vw; background: rgba(8, 12, 16, 0.94); border: 1px solid #ffd27f; border-radius: 8px; padding: 14px 18px; }
+  #buybox h2 { font-size: 22px; letter-spacing: 2px; display: inline-block; }
+  #buyfunds { font-size: 22px; font-weight: bold; color: #8fd68f; float: right; }
+  #buychapter { font-size: 12px; color: #ffd27f; letter-spacing: 1px; margin: 4px 0 10px; }
+  #buybody { display: flex; gap: 16px; }
+  #buygrid { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .buyitem { text-align: left; background: #141a20; border: 1px solid rgba(255,255,255,0.25); border-radius: 5px; color: #fff; padding: 7px 9px; cursor: pointer; font-family: inherit; min-height: 62px; }
+  .buyitem:hover { border-color: #ffd27f; }
+  .buyitem .bi-tag { display: block; font-size: 9px; letter-spacing: 1px; color: #8fa4b0; }
+  .buyitem .bi-label { display: block; font-size: 14px; font-weight: bold; }
+  .buyitem .bi-desc { display: block; font-size: 10px; color: #c8cdd2; line-height: 1.25; margin-top: 1px; }
+  .buyitem .bi-price { display: block; font-size: 13px; font-weight: bold; color: #8fd68f; margin-top: 2px; }
+  .buyitem.owned { border-color: #f5a623; background: #241a08; }
+  .buyitem.cant { opacity: 0.5; }
+  #buyside { width: 250px; }
+  #buyside h4 { font-size: 11px; letter-spacing: 2px; color: #ffd27f; margin-bottom: 6px; }
+  .crewrow { font-size: 11px; margin-bottom: 7px; line-height: 1.3; }
+  .crewrow b { display: block; font-size: 12px; }
+  .crewrow span { color: #c8cdd2; }
+  .casechip-buy { margin-top: 8px; font-size: 12px; font-weight: bold; border: 1px solid #ffd27f; color: #ffd27f; border-radius: 4px; padding: 5px 8px; }
+  #buyclose { margin-top: 12px; background: #f5a623; border: none; border-radius: 4px; padding: 7px 18px; font-weight: bold; cursor: pointer; }
+  /* Scoreboard: top-anchored so the third-person character stays visible. */
+  #scoreboard { padding-top: 108px; background: none; }
+  #scorebox { width: 560px; background: rgba(8, 12, 16, 0.9); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 10px 16px; }
+  #scorebox h2 { font-size: 15px; letter-spacing: 2px; text-align: center; margin-bottom: 6px; }
+  .sc-team { font-size: 12px; font-weight: bold; letter-spacing: 1px; margin: 5px 0 2px; }
+  .sc-team.alder { color: #f5a623; } .sc-team.birch { color: #3fa9ff; }
+  .sc-row { display: flex; gap: 8px; font-size: 12px; padding: 2px 0; border-top: 1px solid rgba(255,255,255,0.1); }
+  .sc-row b { width: 70px; } .sc-row span { width: 80px; color: #ffd27f; font-size: 11px; padding-top: 2px; }
+  .sc-row s { width: 70px; text-decoration: none; } .sc-row em { width: 70px; font-style: normal; color: #8fd68f; }
+  .sc-row i { font-style: normal; color: #cfd6da; }
+  .sc-row.dead { opacity: 0.5; }
+  /* Start + end overlays. */
+  #startov, #endov { align-items: center; background: rgba(4, 6, 8, 0.55); }
+  .card { width: 640px; max-width: 94vw; background: rgba(8, 12, 16, 0.92); border: 1px solid #ffd27f; border-radius: 10px; padding: 22px 28px; text-align: center; }
+  .card h1 { font-size: 44px; letter-spacing: 4px; }
+  .card h1 span { color: #f5a623; }
+  .card h2 { font-size: 13px; letter-spacing: 3px; color: #8fa4b0; margin: 2px 0 12px; }
+  .card p { font-size: 14px; line-height: 1.55; color: #e8e4da; text-align: left; }
+  .card p b { color: #ffd27f; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 18px; font-size: 12px; text-align: left; margin: 14px 0; color: #cfd6da; }
+  .controls b { color: #fff; }
+  #playbtn, #againbtn { background: #f5a623; color: #111; border: none; border-radius: 5px; padding: 11px 34px; font-size: 17px; font-weight: bold; letter-spacing: 1px; cursor: pointer; }
+  #endtitle { font-size: 34px; letter-spacing: 2px; margin-bottom: 10px; }
+  #endtext { font-size: 15px; line-height: 1.5; }
+  #endstats { font-size: 12px; letter-spacing: 1px; color: #ffd27f; margin: 12px 0; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div id="radarBox" class="panel"><h3>HARROW DISTRICT</h3><canvas id="radar" width="168" height="168"></canvas></div>
+  <div id="topbar" class="panel">
+    <div class="scores"><span class="a">ALDER <span id="scoreA">0</span></span><span class="dash">—</span><span class="b"><span id="scoreB">0</span> BIRCH</span></div>
+    <div id="timer">01:40</div>
+    <div id="roundLabel">ROUND 1 / 13</div>
+    <div class="pips" id="pipsA"></div>
+    <div class="pips" id="pipsB"></div>
+  </div>
+  <div id="killfeed"></div>
+  <div id="chatter"></div>
+  <div id="objBox">
+    <div id="objective"></div>
+    <div id="planline"></div>
+    <div id="casechip"></div>
+  </div>
+  <div id="plantwrap">
+    <div id="plantlabel"></div>
+    <div id="plantbar"><div id="plantfill"></div></div>
+    <span id="plantring"></span><span id="plantpct"></span>
+  </div>
+  <div id="vitals" class="panel">
+    <span id="healthnum">100</span> <span class="hpLabel">HEALTH</span>
+    <div id="armourbar"><div id="armourfill"></div></div>
+    <div class="hpLabel">ARMOUR &nbsp;·&nbsp; <span id="funds">$800</span></div>
+    <div id="mates"></div>
+  </div>
+  <div id="weaponpanel" class="panel">
+    <div id="wpname">ECLIPSE</div>
+    <div id="wpammoRow"><span id="wpammo">12</span> <span id="wpres">/ 48</span></div>
+    <div id="wpslots"></div>
+    <div id="wputils"></div>
+  </div>
+  <div id="hint">WASD MOVE · SHIFT WALK · CTRL CROUCH · SPACE JUMP · V THIRD-PERSON · B BUY · E PLANT · Q GRENADE · G CYCLE · R RELOAD · TAB SCORES</div>
+  <div id="crosshair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="dot"></i></div>
+  <div id="hitmark"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
+  <div id="banner"></div>
+  <div id="lowhp">LOW HEALTH — FIND COVER</div>
+</div>
+<div id="vignette"></div>
+<div id="flashov"></div>
+<div id="dmgnums"></div>
+<div id="buymenu" class="overlay">
+  <div id="buybox">
+    <h2>BUY MENU — HARROW SUPPLY</h2><span id="buyfunds">$800</span>
+    <div id="buychapter"></div>
+    <div id="buybody">
+      <div id="buygrid"></div>
+      <div id="buyside"><h4>THE CREW — YOU ARE THE ENTRY</h4><div id="buycrew"></div>
+      <button id="buyclose">CLOSE [B]</button></div>
+    </div>
+  </div>
+</div>
+<div id="scoreboard" class="overlay">
+  <div id="scorebox"><h2>SCOREBOARD — PILLAR COURT</h2><div id="scoretable"></div></div>
+</div>
+<div id="startov" class="overlay" style="display:flex">
+  <div class="card">
+    <h1>PILLAR <span>COURT</span></h1>
+    <h2>DAYLIGHT SIEGE IN THE HARROW DISTRICT</h2>
+    <p>Harrow District voted to save Monument Plaza as a neighbours' morning market. At dawn the <b>BIRCH</b> demolition crew fenced the plaza and the garden court. <b>ALDER</b> carries the district charter — <b>2,000 signatures</b> — in the courier case. File it at the monument plinth and demolition stops. Lose it and the plaza falls.</p>
+    <p style="margin-top:8px">You are the <b>ENTRY</b>. First to 7 rounds wins. Plant the charter at <b>Site A</b> (monument) or <b>Site B</b> (garden), or eliminate BIRCH. Win rounds to earn funds; spend them in the buy menu.</p>
+    <div class="controls">
+      <div><b>WASD</b> move · <b>Mouse</b> look</div><div><b>Click</b> fire · <b>R</b> reload</div>
+      <div><b>Shift</b> walk · <b>Ctrl</b> crouch · <b>Space</b> jump</div><div><b>B</b> buy · <b>E</b> plant · <b>Q</b> grenade</div>
+      <div><b>G</b> cycle weapon · <b>4–7</b> pick utility</div><div><b>V</b> third-person · <b>Tab</b> scores</div>
+    </div>
+    <button id="playbtn">CLICK TO PLAY</button>
+  </div>
+</div>
+<div id="endov" class="overlay">
+  <div class="card">
+    <div id="endtitle"></div>
+    <p id="endtext" style="text-align:center"></p>
+    <div id="endstats"></div>
+    <button id="againbtn">PLAY AGAIN</button>
+  </div>
+</div>
+<script type="module">
+import './src/main.js';
+</script>
+</body>
+</html>
